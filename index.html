@@ -1,0 +1,589 @@
+<title>AGV Rover Program</title>
+<meta charset="utf-8">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky bar, hero with photo, five phase bands of day cards; each day opens a two-column reader (topic list + detail). */
+:root{
+  --bg:#F3F5FA; --panel:#FFFFFF; --panel2:#E9EEF7; --line:#D3DBEA;
+  --fg:#0B1220; --muted:#566480; --accent:#1F5BFF; --accent-fg:#FFFFFF; --accent-soft:#DCE6FF; --code:#0F1830; --code-fg:#D7E3FF; --ok:#0E7A55; --bad:#C0392B;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#060910; --panel:#0D1322; --panel2:#131B30; --line:#1E2A45;
+  --fg:#E8EEFA; --muted:#8F9DB8; --accent:#4A86FF; --accent-fg:#06101F; --accent-soft:#12254D; --code:#050912; --code-fg:#CFE0FF; --ok:#3DD6A0; --bad:#FF7A7A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#060910; --panel:#0D1322; --panel2:#131B30; --line:#1E2A45;
+  --fg:#E8EEFA; --muted:#8F9DB8; --accent:#4A86FF; --accent-fg:#06101F; --accent-soft:#12254D; --code:#050912; --code-fg:#CFE0FF; --ok:#3DD6A0; --bad:#FF7A7A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+h1,h2,h3,h4{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance;font-weight:700}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto}
+.label{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* ti bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px)));padding:0 max(16px,env(safe-area-inset-left,0px))}
+.bar .wrap{display:flex;align-items:center;gap:16px;height:56px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;display:flex;gap:10px;align-items:center}
+.brand i{width:10px;height:10px;background:var(--accent);display:inline-block;transform:rotate(45deg)}
+.bar .sp{flex:1}
+.pill{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px;font-size:13px}
+.pill:hover{border-color:var(--accent)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center;padding-block:48px 40px}
+.hero h1{font-size:clamp(48px,8vw,96px);letter-spacing:.01em}
+.hero h1 span{color:var(--accent)}
+.hero p.lead{font-size:18px;max-width:52ch;color:var(--muted);margin:20px 0 0}
+.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;padding:12px 20px;font-weight:600;text-decoration:none;display:inline-block}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.btn:hover{filter:brightness(1.08)}
+.hero figure{margin:0;position:relative}
+.hero img{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:6px;display:block;border:1px solid var(--line)}
+.hero figcaption{position:absolute;left:12px;bottom:12px;background:var(--bg);border:1px solid var(--line);padding:4px 10px;border-radius:4px}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-bottom:24px}
+.facts div{padding:16px 20px;border-left:1px solid var(--line);min-width:0}
+.facts div:first-child{border-left:0}
+.facts b{display:block;font-family:var(--f-display);font-size:36px;line-height:1;font-variant-numeric:tabular-nums}
+.shift{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:56px}
+.shift div{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;min-width:0}
+.shift h3{font-size:22px;margin:6px 0 8px}
+.shift p{margin:0;color:var(--muted);font-size:15px}
+
+/* phases + day cards */
+.phase{margin-bottom:40px}
+.phase header{display:flex;align-items:baseline;gap:14px;margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px;flex-wrap:wrap}
+.phase h2{font-size:30px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:12px;text-align:left;min-width:0;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.card .top{display:flex;gap:14px;align-items:flex-start;width:100%;border:0;background:none;padding:0;text-align:left}
+.card .num{font-family:var(--f-display);font-size:44px;line-height:.9;color:var(--accent);font-weight:700;min-width:2.2ch;font-variant-numeric:tabular-nums}
+.card h3{font-size:22px;padding-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--panel2);border-radius:4px;padding:4px 9px;font-size:13px}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.card .go{margin-top:auto;font-size:13px;color:var(--accent);font-weight:600;background:none;border:0;padding:0;text-align:left}
+
+/* reader */
+.crumb{display:flex;gap:10px;align-items:center;padding-block:20px 8px;flex-wrap:wrap}
+.crumb button{background:none;border:0;padding:0;color:var(--accent);font-weight:600}
+.dhead{display:grid;grid-template-columns:1.1fr 1fr;gap:32px;align-items:stretch;padding-block:8px 28px}
+.dhead h1{font-size:clamp(38px,6vw,68px)}
+.dhead .dn{font-family:var(--f-display);color:var(--accent);font-size:20px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.dhead p{color:var(--muted);max-width:56ch;margin:16px 0 0;font-size:17px}
+.dmeta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+.dmeta h4{font-size:15px;letter-spacing:.12em;color:var(--muted);margin-bottom:6px}
+.dmeta ul{margin:0;padding-left:18px;font-size:14px}
+.dmeta li{margin:2px 0}
+.visual{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;min-height:240px;display:flex;align-items:center;justify-content:center;min-width:0}
+.visual img{width:100%;height:100%;object-fit:cover;display:block;max-height:420px}
+.visual svg{width:100%;height:auto;display:block}
+.read{display:grid;grid-template-columns:280px 1fr;gap:24px;align-items:start;padding-bottom:32px}
+.tlist{display:flex;flex-direction:column;gap:8px;position:sticky;top:calc(72px + env(safe-area-inset-top,0px));min-width:0}
+.tbtn{display:flex;gap:12px;align-items:center;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-weight:500}
+.tbtn small{font-family:var(--f-mono);color:var(--muted);font-size:12px}
+.tbtn:hover{border-color:var(--accent)}
+.tbtn[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tbtn[aria-selected="true"] small{color:inherit;opacity:.8}
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:28px;min-width:0}
+.detail h2{font-size:clamp(30px,4vw,44px);margin:6px 0 14px}
+.detail .sum{font-size:18px;max-width:68ch;margin:0 0 20px}
+.detail h4{font-size:16px;letter-spacing:.12em;color:var(--muted);margin:24px 0 10px}
+.detail ul.pts{margin:0;padding:0;list-style:none;display:grid;gap:8px;max-width:72ch}
+.detail ul.pts li{padding-left:22px;position:relative}
+.detail ul.pts li::before{content:"";position:absolute;left:3px;top:.62em;width:8px;height:8px;background:var(--accent);transform:rotate(45deg)}
+.code{position:relative;background:var(--code);border-radius:6px;border:1px solid var(--line);max-width:100%}
+.code pre{margin:0;padding:16px;overflow-x:auto;font-family:var(--f-mono);font-size:13.5px;line-height:1.55;color:var(--code-fg)}
+.code .tag{position:absolute;top:8px;right:8px;display:flex;gap:6px;align-items:center}
+.code .tag span{font-family:var(--f-mono);font-size:11px;color:var(--code-fg);opacity:.6;text-transform:uppercase}
+.code .tag button{background:transparent;border:1px solid var(--line);color:var(--code-fg);border-radius:4px;font-size:12px;padding:2px 8px}
+.code pre{padding-top:34px}
+.lab{margin-top:24px;border:1px dashed var(--accent);background:var(--accent-soft);border-radius:6px;padding:16px 18px}
+.lab b{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:4px}
+.flow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 4px}
+.flow button{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:13px}
+.flow button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.flow span{color:var(--muted)}
+.pn{display:flex;justify-content:space-between;gap:12px;margin-top:24px;flex-wrap:wrap}
+.pn button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 16px;font-weight:500;text-align:left}
+.pn button:hover{border-color:var(--accent)}
+.foot{border-top:1px solid var(--line);padding-block:24px 40px;color:var(--muted);font-size:14px}
+.sch text{font-family:var(--f-body);fill:var(--fg)}
+.sch .sub{font-family:var(--f-mono);fill:var(--muted)}
+.sch rect.b{fill:var(--panel2);stroke:var(--line);stroke-width:1.5}
+.sch rect.h{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.sch path{stroke:var(--accent);stroke-width:2;fill:none}
+.sch .lk{font-family:var(--f-mono);fill:var(--accent)}
+
+
+/* login */
+.login{display:grid;grid-template-columns:1.1fr 1fr;min-height:calc(100vh - 120px);margin-block:24px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.lpanel{position:relative;min-height:320px;min-width:0}
+.lpanel img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lshade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,9,16,.25),rgba(6,9,16,.92))}
+.ltxt{position:absolute;left:28px;right:28px;bottom:28px;color:#E8EEFA}
+.ltxt .label{color:#9FB2D6}
+.ltxt h1{font-size:clamp(34px,5vw,56px);margin:10px 0}
+.ltxt h1 span{color:#6C9BFF}
+.ltxt p{margin:0;max-width:46ch;color:#C3CFE6}
+.lform{padding:40px;display:flex;flex-direction:column;gap:8px;justify-content:center;max-width:460px;width:100%;margin:0 auto;min-width:0}
+.lform h2{font-size:38px;margin-bottom:8px}
+.lform label{font-size:13px;color:var(--muted);margin-top:8px;font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+input,select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:11px 12px;width:100%;min-width:0}
+input:focus,select:focus{border-color:var(--accent)}
+.pw{display:flex;gap:8px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--bg);border:0;padding:11px;font-weight:600}
+.seg button[aria-checked="true"]{background:var(--accent);color:var(--accent-fg)}
+.err{color:var(--bad);margin:6px 0 0;font-size:14px}
+.hint{color:var(--muted);font-size:13px;margin:8px 0 0}
+.lform .btn{margin-top:14px;width:100%}
+.btn:disabled{opacity:.6;cursor:wait}
+.me{display:flex;flex-direction:column;line-height:1.1;text-align:right}
+.me b{font-size:14px;font-weight:600}
+#who{display:flex;align-items:center;gap:8px}
+#who a.pill{text-decoration:none}
+/* dashboard */
+.dtitle{font-size:clamp(36px,5vw,60px)}
+.sub{color:var(--muted);margin:8px 0 20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:22px;margin-bottom:24px;min-width:0}
+.panel h2{font-size:26px;margin-bottom:14px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-family:var(--f-mono);font-weight:500;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td small{display:block;color:var(--muted);font-size:12px}
+td:first-child{font-variant-numeric:tabular-nums}
+.acts{white-space:nowrap}.acts .pill{margin-right:6px}
+.pill.danger{color:var(--bad)}
+.inl{width:150px;padding:5px 8px;margin-right:6px;display:inline-block}
+.st{font-size:12px;padding:2px 8px;border-radius:4px;border:1px solid currentColor}
+.st.on{color:var(--ok)}.st.off{color:var(--muted)}
+.act.bad{color:var(--bad);font-weight:600}
+.empty{color:var(--muted);margin:0}
+.addf{display:grid;grid-template-columns:1fr 1.3fr 1fr auto;gap:12px;align-items:end;margin-bottom:12px}
+.addf label{display:block;font-size:12px;font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.filters select{width:auto;min-width:160px}
+.notice{border:1px solid var(--bad);color:var(--bad);border-radius:6px;padding:12px 16px;margin-bottom:16px}
+@media (max-width:900px){.login{grid-template-columns:1fr}.lpanel{min-height:240px}.addf{grid-template-columns:1fr}.lform{padding:28px 20px}}
+@media (max-width:900px){
+  .hero,.dhead{grid-template-columns:1fr;gap:24px}
+  .read{grid-template-columns:1fr}
+  .tlist{position:static;flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .tbtn{white-space:nowrap;flex:0 0 auto}
+  .facts{grid-template-columns:1fr 1fr}
+  .facts div:nth-child(3){border-left:0}
+  .facts div:nth-child(n+3){border-top:1px solid var(--line)}
+  .shift{grid-template-columns:1fr}
+}
+@media (max-width:520px){.detail{padding:20px 16px}.dmeta{grid-template-columns:1fr}.brand span{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="bar"><div class="wrap">
+  <a class="brand" href="#" id="home"><i></i>AGV Rover <span>· Training Program</span></a>
+  <div class="sp"></div>
+  <div id="who"></div><button class="pill" id="theme" type="button" aria-label="Toggle light or dark theme">Theme</button>
+</div></div>
+
+<main class="wrap" id="app"></main>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+const IMG={"rovers": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "bots": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "lidar": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "nav": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "ui": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "wheel": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "dash": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E", "aerial": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect width='4' height='3' fill='%23131B30'/%3E%3C/svg%3E"};
+const DAYS = [
+{n:1,title:"Introduction to AGV Systems",photo:"rovers",goal:"Understand what an Automated Guided Vehicle is, how it is built, and where it is used, then plan the robot you will build over the next 14 days.",out:["Explain the difference between AGV and AMR","Name the main subsystems of the rover","Draw the system block diagram for your build"],hw:["Course rover chassis","Raspberry Pi","Motor drivers","Battery pack"],
+topics:[
+{t:"AGV Architecture",s:"An AGV is a mobile ground vehicle that moves loads or tools without a human driver. Its architecture is a stack of layers: sensing at the bottom, then perception, planning and control, with motors and a power system carrying out the commands.",p:["Sensing layer: encoders, LiDAR, camera, bump and ultrasonic sensors","Computing layer: Raspberry Pi running Linux, Python and ROS2","Actuation layer: motor drivers, DC encoder motors and BLDC hub motors","Power layer: battery, fuse, emergency stop, DC-DC converters","Classic AGVs follow fixed paths (magnetic tape, wires). AMRs build a map and choose their own route"],lab:"Sketch the four layers on paper and label which parts of your kit belong to each layer."},
+{t:"Industrial Applications",s:"AGVs and AMRs move material in places where repeated transport is expensive, dull or dangerous. The same ideas you learn here scale up to warehouse and factory fleets.",p:["Warehouses: shelf and tote movers such as the Amazon Kiva system","Factories: carrying parts between assembly stations","Hospitals: delivering linen, meals and medicines","Hazardous areas: inspection in chemical, nuclear and mining sites","Campus and sidewalk delivery robots, as shown in the photo"],lab:"Pick one industry and list three tasks a robot could do there, plus one risk to manage."},
+{t:"Hardware Overview",s:"Meet every physical part of the rover. Knowing what each part does and how it connects makes wiring and debugging far easier in later days.",p:["Raspberry Pi 4 or 5: the on-board computer","Encoder DC motors: drive wheels that report their own speed","BLDC hub motor with controller: high torque drive wheel","2D LiDAR: distance scan around the robot","USB camera: colour images for vision tasks","LCD or touch display: status and controls","Battery, switch, fuse and emergency stop"],lab:"Identify and tag every component on the chassis and note its voltage rating."},
+{t:"System Design",s:"System design turns requirements into a plan. You decide payload, speed, run time and sensors, then connect them with a power budget and a communication map.",p:["Define requirements: payload, max speed, battery life, floor type","Power budget: add up current draw of every part, then add 30% margin","Communication map: GPIO, I2C, UART, USB, Ethernet and Wi-Fi","Safety plan: emergency stop that cuts motor power in hardware","Keep power wiring and signal wiring physically separate"],lab:"Fill in a power budget table and draw the full block diagram of your rover."}]},
+{n:2,title:"Raspberry Pi Fundamentals",goal:"Set up the Raspberry Pi as a headless Linux computer you can control from your laptop.",out:["Flash and boot Raspberry Pi OS or Ubuntu","Use the Linux terminal confidently","Control GPIO pins from the shell","Log in remotely with SSH"],hw:["Raspberry Pi 4/5","microSD card 32 GB","5V 3A power supply","Laptop on the same network"],
+topics:[
+{t:"Raspberry Pi Installation",s:"Install an operating system on a microSD card and boot the Pi for the first time. Use Raspberry Pi OS for simple projects. Use Ubuntu 22.04 later when you install ROS2 Humble.",p:["Download Raspberry Pi Imager on your laptop","Choose OS, pick the SD card, then open advanced settings","Set hostname, username, password, Wi-Fi and enable SSH before writing","Insert the card, connect power and wait about a minute","Find the Pi on your network with its hostname or your router page"],c:{l:"bash",x:"# after first boot\nsudo apt update && sudo apt full-upgrade -y\nsudo reboot"},lab:"Flash a card, boot the Pi and update the system."},
+{t:"Linux Commands",s:"Almost all robotics work happens in the terminal. A small set of commands covers most daily tasks.",p:["Navigation: pwd, ls, cd, mkdir","Files: cp, mv, rm, nano, cat","Packages: apt install, pip install","Processes: ps, top, kill, systemctl","Permissions: chmod, chown, sudo","Network: ip a, ping, hostname -I"],c:{l:"bash",x:"mkdir -p ~/agv/day2 && cd ~/agv/day2\necho 'hello rover' > notes.txt\nls -l\nhostname -I\ntop"},lab:"Create a project folder structure for the whole course and write a notes file in each day folder."},
+{t:"GPIO Basics",s:"GPIO pins are the Pi's connection to the outside world. Each pin can be an input or an output at 3.3 V. They are not 5 V tolerant, so never connect a 5 V signal directly.",p:["40-pin header: power, ground, GPIO, I2C, SPI and UART pins","Use BCM numbering (GPIO17) rather than physical pin numbers","Output drives an LED or a driver input. Input reads a switch or sensor","Always use a resistor with an LED (about 330 ohm)","Pull-up and pull-down resistors keep inputs from floating"],c:{l:"bash",x:"pinctrl set 17 op dh   # Pi 5: set GPIO17 as output, high\npinctrl set 17 dl      # low\npinctrl get 17"},lab:"Wire an LED and a push button, then switch the LED from the terminal."},
+{t:"SSH & Remote Access",s:"SSH lets you control the rover from your laptop over Wi-Fi, so you can work while the robot drives around. It is the main way you will work from now on.",p:["Connect: ssh user@hostname.local","Copy files with scp or use VS Code Remote SSH","Create keys with ssh-keygen and ssh-copy-id for password-free login","Use tmux so programs keep running if Wi-Fi drops","VNC or X forwarding when you need a graphical window (RViz)"],c:{l:"bash",x:"ssh-keygen -t ed25519\nssh-copy-id pi@rover.local\nssh pi@rover.local\nscp test.py pi@rover.local:~/agv/day2/"},lab:"Log in from your laptop, copy a file across and start a tmux session."}]},
+{n:3,title:"Raspberry Pi Programming",goal:"Write Python programs that read sensors, drive outputs and talk to other boards.",out:["Write structured Python for robot tasks","Control outputs and read inputs","Read distance and other sensors","Exchange data with a microcontroller over serial"],hw:["Raspberry Pi","LED, button, resistors","Ultrasonic sensor HC-SR04","USB serial cable or Arduino"],
+topics:[
+{t:"Python for Robotics",s:"Python is the main language for the Pi. Robot code is built from small loops that read, decide and act many times per second.",p:["Variables, functions, classes and modules","Main loop pattern with a fixed time step","Exceptions and try/finally so motors stop when a program crashes","Virtual environments keep packages tidy","Logging with the logging module instead of print"],c:{l:"python",x:"import time\n\ndef main():\n    try:\n        while True:\n            # read -> decide -> act\n            time.sleep(0.05)   # 20 Hz loop\n    finally:\n        print('stopping motors')\n\nmain()"},lab:"Write a 20 Hz loop that prints a counter and shuts down cleanly with Ctrl+C."},
+{t:"GPIO Control",s:"The gpiozero library gives short, readable code for outputs, inputs and PWM, and works on Pi 4 and Pi 5.",p:["LED and Button classes handle pins for you","PWMOutputDevice changes brightness or motor speed through duty cycle","Use events such as when_pressed rather than polling","Debounce buttons to avoid false triggers"],c:{l:"python",x:"from gpiozero import LED, Button, PWMLED\nfrom signal import pause\n\nled = PWMLED(17)\nbtn = Button(27)\nbtn.when_pressed = lambda: setattr(led, 'value', 1.0)\nbtn.when_released = lambda: setattr(led, 'value', 0.2)\npause()"},lab:"Make a button that cycles an LED through three brightness levels."},
+{t:"Sensor Interfacing",s:"Sensors tell the robot about the world. Each type uses a different interface, so learn the pattern for each.",p:["Digital sensors: IR obstacle, limit switch","Pulse sensors: HC-SR04 ultrasonic sends a trigger and times the echo","I2C sensors: IMU (MPU6050), ADC boards. Enable I2C and use i2cdetect","Analog sensors need an ADC such as the ADS1115","Filter noisy readings with a moving average"],c:{l:"python",x:"from gpiozero import DistanceSensor\nfrom time import sleep\n\ns = DistanceSensor(echo=24, trigger=23, max_distance=2)\nwhile True:\n    print(f'{s.distance*100:.1f} cm')\n    sleep(0.2)"},lab:"Show distance on the terminal and turn on an LED when something is closer than 20 cm."},
+{t:"Serial Communication",s:"Serial links connect the Pi to motor controllers, microcontrollers and GPS. Data moves one byte at a time, so both sides must agree on speed and message format.",p:["UART on /dev/ttyUSB0, /dev/ttyACM0 or /dev/serial0","Common speed: 115200 baud, 8 data bits, no parity, 1 stop bit","Use short text messages ending in a newline","Add a checksum when data matters","Add your user to the dialout group for access"],c:{l:"python",x:"import serial\n\nwith serial.Serial('/dev/ttyACM0', 115200, timeout=1) as ser:\n    ser.write(b'PING\\n')\n    print(ser.readline().decode().strip())"},lab:"Send a command to a microcontroller that blinks its LED, and read back a reply."}]},
+{n:4,title:"Encoder Motor Interfacing",goal:"Drive a DC motor and measure its real speed with an encoder, then hold the speed steady with feedback.",out:["Drive a motor with PWM through an H-bridge","Count encoder pulses and compute RPM","Hold a target speed with a PID controller"],hw:["DC gear motor with encoder","L298N or BTS7960 driver","12V battery","Raspberry Pi"],
+topics:[
+{t:"Encoder Basics",s:"An encoder is a sensor on the motor shaft that produces pulses as it turns. Counting pulses tells you how far the wheel has turned.",p:["Quadrature encoders have two channels, A and B, 90 degrees apart","The order of A and B shows direction of rotation","Resolution is stated as pulses per revolution (PPR), then multiplied by the gear ratio","Wheel distance = turns x wheel circumference","Power the encoder from 3.3 V or use a level shifter"],c:{l:"python",x:"from gpiozero import DigitalInputDevice\n\ncount = 0\ndef tick():\n    global count\n    count += 1\n\nA = DigitalInputDevice(5)\nA.when_activated = tick"},lab:"Turn the wheel by hand one full revolution and compare your count to the expected pulses."},
+{t:"RPM Measurement",s:"Speed is pulses counted in a fixed time window, converted to revolutions per minute.",p:["RPM = (pulses / pulses per revolution) x (60 / window seconds)","A short window reacts fast but is noisy. A long window is smooth but slow","Smooth the result with a low-pass filter","Convert RPM to wheel speed: v = RPM x circumference / 60"],c:{l:"python",x:"import time\nPPR = 11 * 30        # encoder pulses x gear ratio\nlast = count; t0 = time.time()\nwhile True:\n    time.sleep(0.1)\n    now = count; t1 = time.time()\n    rpm = (now - last) / PPR * 60 / (t1 - t0)\n    last, t0 = now, t1\n    print(f'{rpm:.1f} RPM')"},lab:"Log RPM at several PWM values and plot the PWM versus RPM curve."},
+{t:"Speed Control",s:"PWM sets the average voltage to the motor. The motor driver (H-bridge) lets you set direction as well as speed.",p:["PWM frequency of 1 to 20 kHz avoids audible whine","Direction pins IN1 and IN2 choose forward, reverse or brake","Ramp the speed up and down to avoid current spikes","Never power a motor directly from a GPIO pin","Share ground between Pi, driver and battery"],c:{l:"python",x:"from gpiozero import Motor\n\nm = Motor(forward=20, backward=21, pwm=True)\nm.forward(0.5)   # 50% speed\nm.backward(0.3)\nm.stop()"},lab:"Drive forward and backward with smooth acceleration, then stop."},
+{t:"Closed Loop Concepts",s:"Open loop sends a command and hopes. Closed loop measures the result and corrects the command. A PID controller is the standard tool.",p:["Error = target RPM minus measured RPM","P: reacts to present error. I: removes steady offset. D: calms overshoot","Tune by raising P until it oscillates, back off, then add a little I","Limit the integral to prevent wind-up","Run the loop at a fixed rate, for example 20 Hz"],c:{l:"python",x:"kp, ki, kd = 0.8, 0.2, 0.0\nintegral = prev = 0.0\ndef pid(target, measured, dt):\n    global integral, prev\n    err = target - measured\n    integral = max(-100, min(100, integral + err*dt))\n    out = kp*err + ki*integral + kd*(err-prev)/dt\n    prev = err\n    return max(0, min(100, out))   # PWM %"},lab:"Set a target of 60 RPM, add a load by hand and watch the controller hold speed."}]},
+{n:5,title:"BLDC Hub Motor Control",goal:"Control a brushless hub motor through its controller, regulate speed and apply the safety practices needed for a high-power drive.",out:["Describe how a BLDC motor commutates","Command the controller from the Pi","Regulate speed and ramp smoothly","Apply a safe start-up and stop routine"],hw:["BLDC hub motor 24-36V","BLDC controller with hall sensors","Throttle/PWM input","Contactor or emergency stop"],
+topics:[
+{t:"BLDC Fundamentals",s:"A brushless DC motor has no brushes. The controller switches coil currents electronically in the right order, guided by hall sensors in the motor.",p:["Three phase wires (U, V, W) and five hall sensor wires","Hall sensors tell the controller where the rotor is","Six-step commutation energises two phases at a time","Hub motors place the motor inside the wheel for a direct drive","Higher torque, better efficiency and longer life than brushed motors"],lab:"Identify phase and hall wires on your motor and match them to the controller connector."},
+{t:"Controller Interface",s:"Most hub motor controllers accept a throttle signal. The Pi can produce it as PWM, filtered into an analog voltage, or sent over serial or CAN, depending on the controller.",p:["Throttle input is usually 0.8 V to 4.2 V","A PWM output through an RC filter or DAC gives a steady voltage","Separate enable, direction and brake lines","Isolate the Pi from the power stage with optocouplers or a DAC board","Check the controller datasheet for exact wiring"],c:{l:"python",x:"from gpiozero import PWMOutputDevice, DigitalOutputDevice\n\nthrottle = PWMOutputDevice(18, frequency=1000)  # through RC filter\nenable   = DigitalOutputDevice(23)\nenable.on()\nthrottle.value = 0.25   # 25% command"},lab:"Lift the wheel off the ground and spin it slowly at three throttle levels."},
+{t:"Speed Regulation",s:"Using the hall sensor pulses as feedback, apply the same PID idea from Day 4 to the hub motor.",p:["Hall pulse frequency tells wheel speed","Add acceleration and deceleration ramps","Use feed-forward: start from the throttle that gives roughly the right speed","Saturate the output and handle the zero-speed case","Log speed against command to check how well it tracks"],lab:"Command a speed of 0.5 m/s and plot the measured speed."},
+{t:"Safety Measures",s:"A hub motor can move a robot hard and fast. Safe habits protect people and equipment and are required before every test.",p:["Wheels off the ground for first tests","Hardware emergency stop that cuts motor power, not only software","Fuse close to the battery","Throttle to zero before enabling, and a watchdog that stops the motor if commands stop","Check wiring with power off, wear safety glasses, keep loose clothing away","Never charge or leave batteries unattended"],lab:"Test your emergency stop and watchdog, and record the stop time."}]},
+{n:6,title:"ROS2 Introduction",goal:"Learn the Robot Operating System 2 and the message-passing model that connects every part of the rover.",out:["Install ROS2 Humble on Ubuntu 22.04","Create a package with a publisher and subscriber","Use ros2 command line tools to inspect a running system"],hw:["Raspberry Pi with Ubuntu 22.04","Laptop with ROS2 for tools"],
+topics:[
+{t:"ROS2 Architecture",s:"ROS2 is a framework that lets many small programs work together as one robot. It uses DDS middleware, so programs find each other on the network without a central master.",p:["Workspace with src, build, install and log folders","Packages contain nodes, launch files and config","colcon builds the workspace","Source the setup file in every new terminal","Quality of service (QoS) settings control reliability and history"],c:{l:"bash",x:"sudo apt install ros-humble-ros-base python3-colcon-common-extensions\nsource /opt/ros/humble/setup.bash\nmkdir -p ~/agv_ws/src && cd ~/agv_ws\ncolcon build"},lab:"Install ROS2, build an empty workspace and run the demo talker and listener."},
+{t:"Nodes & Executors",s:"A node is one program with one job, such as reading a sensor or driving motors. An executor is the part that runs the node's callbacks.",p:["Keep nodes small and single-purpose","Parameters set values like wheel radius without editing code","Launch files start many nodes together","Single-threaded executor runs callbacks one by one","Multi-threaded executor runs them in parallel"],c:{l:"bash",x:"ros2 pkg create --build-type ament_python agv_basics\nros2 node list\nros2 param list /my_node"},lab:"Create the agv_basics package with one node that logs a message once a second."},
+{t:"Topics & Services",s:"Topics stream data continuously, such as sensor readings. Services answer one request with one response, such as 'reset odometry'. Actions handle long tasks with feedback, such as 'go to goal'.",p:["Topic: many-to-many streaming","Service: request and reply","Action: goal, feedback and result","Standard message types: geometry_msgs/Twist for velocity, sensor_msgs/LaserScan for LiDAR","Inspect with ros2 topic list, echo, hz and info"],c:{l:"bash",x:"ros2 topic list\nros2 topic echo /cmd_vel\nros2 topic hz /scan\nros2 service call /reset_odom std_srvs/srv/Empty"},lab:"Publish a Twist message from the command line and watch it with topic echo."},
+{t:"Publishers & Subscribers",s:"A publisher sends messages on a topic. A subscriber receives them. Together they let the sensor node, planner and motor node stay independent.",p:["Create with create_publisher and create_subscription","Use timers for periodic publishing","Match message types and topic names","Use rqt_graph to see how nodes connect"],c:{l:"python",x:"import rclpy\nfrom rclpy.node import Node\nfrom std_msgs.msg import String\n\nclass Talker(Node):\n    def __init__(self):\n        super().__init__('talker')\n        self.pub = self.create_publisher(String, 'chatter', 10)\n        self.create_timer(1.0, self.tick)\n    def tick(self):\n        self.pub.publish(String(data='hello rover'))\n\nrclpy.init(); rclpy.spin(Talker())"},lab:"Write a subscriber that listens to chatter and a publisher that sends /cmd_vel to your motor node."}]},
+{n:7,title:"LiDAR Fundamentals",photo:"lidar",goal:"Understand how LiDAR measures the world and bring its data into ROS2.",out:["Explain time-of-flight and triangulation","Receive scans in Python and ROS2","View the live scan in RViz"],hw:["2D LiDAR (e.g. RPLIDAR A1)","USB adapter","Raspberry Pi"],
+topics:[
+{t:"LiDAR Working Principle",s:"LiDAR stands for light detection and ranging. It sends out light and measures how long, or at what angle, it returns. A 2D LiDAR spins to produce a flat slice of the surroundings.",p:["Time-of-flight: distance = speed of light x time / 2","Low-cost units use triangulation with a laser and a small camera","Typical range 0.15 to 12 m, 360 degree scan, 5 to 10 scans per second","Each point has an angle and a distance","Glass, black surfaces and strong sunlight can give bad readings"],lab:"Place objects at known distances and compare readings to a tape measure."},
+{t:"Data Acquisition",s:"The LiDAR sends a stream of angle and distance pairs over USB serial. A driver converts them into complete scans.",p:["Plug in and check the port with ls /dev/ttyUSB*","Give permission to the port with a udev rule or chmod","Each scan holds about 360 to 720 ranges","Remove invalid points (zero or infinity)","Convert polar (r, theta) into x, y for plotting"],c:{l:"bash",x:"sudo apt install ros-humble-rplidar-ros\nsudo chmod 666 /dev/ttyUSB0\nros2 launch rplidar_ros rplidar_a1_launch.py"},lab:"Print the nearest obstacle distance and its angle from each scan."},
+{t:"LiDAR Visualization",s:"RViz2 draws the scan in 3D space so you can see what the robot sees and check that the sensor is working.",p:["Run RViz2 on your laptop, connected over the same network","Add the LaserScan display and set the fixed frame to laser","Change point size and colour to read the scan clearly","Use the same ROS_DOMAIN_ID on both machines"],c:{l:"bash",x:"export ROS_DOMAIN_ID=7\nrviz2\n# Add > LaserScan, topic /scan, Fixed Frame: laser"},lab:"Walk around the room and record the scan changing in RViz."},
+{t:"ROS Integration",s:"The LiDAR becomes part of the robot through the TF tree, which says where the sensor sits on the body.",p:["Topic /scan with type sensor_msgs/LaserScan","Static transform from base_link to laser","Match the sensor frame_id in the driver and the TF","Write a node that stops the robot when something is closer than 0.4 m"],c:{l:"bash",x:"ros2 run tf2_ros static_transform_publisher 0.1 0 0.15 0 0 0 base_link laser"},lab:"Build a simple 'stop when blocked' node using /scan and /cmd_vel."}]},
+{n:8,title:"Mapping using LiDAR",photo:"aerial",goal:"Build a map of an unknown room with SLAM and save it for use in navigation.",out:["Describe how SLAM works","Create a map with slam_toolbox","Save and reload the map"],hw:["LiDAR","Wheel odometry","Raspberry Pi","Laptop for RViz"],
+topics:[
+{t:"SLAM Concepts",s:"SLAM means simultaneous localization and mapping. The robot builds a map and works out where it is inside that map at the same time.",p:["Scan matching aligns each new scan with the map","Odometry from wheel encoders gives a first guess of motion","Loop closure corrects drift when the robot returns to a known place","slam_toolbox is the standard 2D SLAM tool in ROS2","Slow, smooth driving gives better maps"],lab:"List the sources of drift in your robot and how each can be reduced."},
+{t:"Map Generation",s:"Launch SLAM, drive the rover around, and the map grows in RViz. Save it once the room is complete.",p:["Publish odometry (/odom) and the TF odom to base_link","Start slam_toolbox in online async mode","Drive slowly, with the LiDAR seeing walls at all times","Save the map as a pair of .pgm and .yaml files"],c:{l:"bash",x:"ros2 launch slam_toolbox online_async_launch.py\nros2 run teleop_twist_keyboard teleop_twist_keyboard\nros2 run nav2_map_server map_saver_cli -f ~/agv_ws/maps/lab"},lab:"Map your classroom or lab and save the files."},
+{t:"Occupancy Grid Mapping",s:"The saved map is an occupancy grid: a picture where each cell says free, occupied or unknown.",p:["Each cell holds a probability of being occupied","Resolution is metres per cell, typically 0.05","Free space is white, walls black and unknown grey","The yaml file stores resolution, origin and thresholds","Edit the pgm in an image editor to remove noise or add no-go areas"],c:{l:"yaml",x:"image: lab.pgm\nresolution: 0.05\norigin: [-5.0, -5.0, 0.0]\noccupied_thresh: 0.65\nfree_thresh: 0.25\nnegate: 0"},lab:"Open the pgm map, measure a known wall and check the resolution is correct."},
+{t:"Environment Scanning",s:"Good maps depend on how you scan. Plan the route before you start and check the result as you drive.",p:["Cover the whole space with overlapping views","Avoid fast turns and crowds that move through the scene","Add features in long empty corridors","Drive loops to trigger loop closure","Compare map size with the real room size"],lab:"Drive a loop and compare the map before and after loop closure."}]},
+{n:9,title:"Localization & Navigation",photo:"nav",goal:"Let the rover find itself on a saved map and drive to a goal while avoiding obstacles.",out:["Localize with AMCL","Plan a path and follow it","Avoid obstacles using costmaps","Send goals from RViz"],hw:["Mapped rover","Nav2 on ROS2 Humble"],
+topics:[
+{t:"Localization Concepts",s:"Localization answers 'where am I on this map?'. AMCL uses particles, many guesses of the robot position, and keeps those that match the LiDAR scan.",p:["Give an initial pose in RViz with 2D Pose Estimate","Particles spread out and then converge as the robot moves","Odometry gives short-term motion and the scan corrects long-term drift","Tune number of particles and the noise models","A cloud that stays wide means the robot is lost"],lab:"Set a wrong initial pose on purpose and watch the particles recover."},
+{t:"Path Planning",s:"The planner finds a route on the map, and the controller turns that route into velocity commands.",p:["Global planner: finds a full path (NavFn, Smac)","Local controller: follows it and reacts (DWB, Regulated Pure Pursuit)","Costmaps add a safety margin around walls","Inflation radius should be at least the robot radius","Set the robot footprint accurately"],lab:"Send three goals and compare the global and local paths in RViz."},
+{t:"Obstacle Detection",s:"The local costmap uses live LiDAR data to show new obstacles, such as a person or a box that was not in the map.",p:["Obstacle layer marks cells hit by the scan","Voxel and range layers handle 3D sensors","Raytracing clears cells when the obstacle moves away","Set min and max obstacle heights and the scan topic","Recovery behaviours: wait, back up, spin"],lab:"Place a box on the route and see the rover go around it."},
+{t:"Navigation Stack",s:"Nav2 is the navigation stack that joins the map server, AMCL, planners, controllers and recovery behaviours into one system.",p:["bringup_launch.py starts everything","params file defines each plugin and its tuning","Behaviour tree decides what to do when it gets stuck","Send goals by RViz, command line or code","Lifecycle nodes start in order: configure, then activate"],c:{l:"bash",x:"ros2 launch nav2_bringup bringup_launch.py \\\n  map:=$HOME/agv_ws/maps/lab.yaml \\\n  params_file:=$HOME/agv_ws/config/nav2.yaml\nros2 launch nav2_bringup rviz_launch.py"},lab:"Use Nav2 Goal in RViz to send the rover to three places in your map."}]},
+{n:10,title:"Computer Vision Basics",goal:"Use a camera on the Pi with OpenCV to capture, process and stream images.",out:["Capture frames from a USB camera","Apply basic image processing","Stream live video to a browser"],hw:["USB camera","Raspberry Pi","OpenCV (python3-opencv)"],
+topics:[
+{t:"OpenCV Introduction",s:"OpenCV is the main computer vision library. Images are arrays of numbers, so image tasks become array tasks.",p:["Install with sudo apt install python3-opencv","Images are NumPy arrays with shape (height, width, 3)","OpenCV uses BGR order, not RGB","Read, show and save images with imread, imshow and imwrite","Draw lines, boxes and text onto frames for debugging"],c:{l:"python",x:"import cv2\nimg = cv2.imread('test.jpg')\nprint(img.shape)\ncv2.rectangle(img, (50,50), (200,200), (255,0,0), 2)\ncv2.imwrite('out.jpg', img)"},lab:"Load an image, draw a labelled box on it and save the result."},
+{t:"USB Camera Interface",s:"A USB camera appears as a video device. Open it with VideoCapture and read frames in a loop.",p:["Check devices with ls /dev/video* and v4l2-ctl --list-devices","Set resolution, for example 640 x 480, to keep processing fast","Frame rate depends on resolution and lighting","Always release the camera at the end","Read returns a success flag, so check it"],c:{l:"python",x:"import cv2\ncap = cv2.VideoCapture(0)\ncap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)\ncap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)\nwhile True:\n    ok, frame = cap.read()\n    if not ok: break\n    cv2.imshow('cam', frame)\n    if cv2.waitKey(1) == 27: break\ncap.release()"},lab:"Capture frames and print the real frames per second."},
+{t:"Image Processing",s:"Processing makes images simpler for the next step. Most robot vision pipelines start with these tools.",p:["Grayscale and resizing reduce work","Gaussian blur removes noise","Thresholding separates bright from dark","Canny edge detection finds outlines","Morphology (erode, dilate) cleans masks","Region of interest crops to the road or floor"],c:{l:"python",x:"gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)\nblur  = cv2.GaussianBlur(gray, (5,5), 0)\nedges = cv2.Canny(blur, 50, 150)"},lab:"Show original, grayscale and edges side by side in one window."},
+{t:"Video Streaming",s:"Stream the camera over Wi-Fi so you can watch what the robot sees from your laptop.",p:["MJPEG over HTTP is the simplest approach","Flask serves each frame as a JPEG in a multipart response","Lower resolution and quality for smoother streaming","Open http://rover.local:5000 in a browser","ROS2 option: publish images on /image_raw with cv_bridge"],c:{l:"python",x:"from flask import Flask, Response\nimport cv2\napp = Flask(__name__); cap = cv2.VideoCapture(0)\n\ndef frames():\n    while True:\n        ok, f = cap.read()\n        if not ok: break\n        _, jpg = cv2.imencode('.jpg', f)\n        yield b'--frame\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n' + jpg.tobytes() + b'\\r\\n'\n\n@app.route('/')\ndef video():\n    return Response(frames(), mimetype='multipart/x-mixed-replace; boundary=frame')\n\napp.run(host='0.0.0.0', port=5000)"},lab:"Watch the live stream on your phone or laptop."}]},
+{n:11,title:"Object Detection",goal:"Detect and follow simple objects using classic computer vision methods.",out:["Find objects by colour","Classify simple shapes","Detect movement","Follow a moving object"],hw:["USB camera","Coloured markers or balls","Raspberry Pi"],
+topics:[
+{t:"Color Detection",s:"HSV colour space separates colour from brightness, which makes colour detection much more stable than RGB under changing light.",p:["Convert BGR to HSV with cvtColor","Use inRange to keep pixels inside a colour range","Red wraps around the hue scale, so use two ranges","Clean the mask and find the largest contour","Centre of the contour gives object position"],c:{l:"python",x:"hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)\nmask = cv2.inRange(hsv, (100,120,70), (130,255,255))   # blue\nmask = cv2.erode(mask, None, 2); mask = cv2.dilate(mask, None, 2)\ncnts,_ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)"},lab:"Detect a blue object and print its centre x, y."},
+{t:"Shape Detection",s:"Contours describe the outline of an object. Counting the corners of a simplified outline names basic shapes.",p:["Find contours on a threshold or edge image","approxPolyDP simplifies an outline","3 corners = triangle, 4 = square or rectangle, many = circle","Ignore tiny areas with contourArea","Use aspect ratio to separate squares from rectangles"],c:{l:"python",x:"for c in cnts:\n    if cv2.contourArea(c) < 500: continue\n    approx = cv2.approxPolyDP(c, 0.04*cv2.arcLength(c, True), True)\n    name = {3:'triangle', 4:'rectangle'}.get(len(approx), 'circle')"},lab:"Label triangles, rectangles and circles on a sheet of paper."},
+{t:"Motion Detection",s:"Motion detection compares the current frame with a reference and highlights what changed.",p:["Frame difference with absdiff","Background subtraction with createBackgroundSubtractorMOG2","Threshold and dilate the difference","Ignore small areas to avoid noise","Camera on a moving robot sees the whole scene change, so use it when stationary"],c:{l:"python",x:"bg = cv2.createBackgroundSubtractorMOG2(history=200, varThreshold=40)\nmask = bg.apply(frame)\nmask = cv2.threshold(mask, 200, 255, cv2.THRESH_BINARY)[1]"},lab:"Trigger a message when a person walks in front of the stationary robot."},
+{t:"Tracking Concepts",s:"Detection finds an object in every frame. Tracking follows the same object over time and lets the robot react smoothly.",p:["Compute the error between object centre and image centre","Turn the error into a steering command with a P controller","OpenCV trackers (CSRT, KCF) follow a selected box","Kalman filters smooth and predict position","Lose-and-search behaviour when the target disappears"],c:{l:"python",x:"err = (cx - frame.shape[1]/2) / (frame.shape[1]/2)   # -1 .. 1\nangular_z = -0.8 * err\nlinear_x  = 0.15 if abs(err) < 0.5 else 0.0"},lab:"Make the rover turn to face and follow a coloured ball."}]},
+{n:12,title:"AGV Vision Integration",photo:"wheel",goal:"Use the camera as a navigation sensor and combine it with LiDAR for safer driving.",out:["Steer from camera data","Recognise obstacles in the image","Follow a lane or line","Combine vision and LiDAR"],hw:["USB camera mounted forward-facing","Lane tape on the floor","LiDAR"],
+topics:[
+{t:"Camera Based Navigation",s:"A forward camera shows the route ahead. The robot picks a target point in the image and steers toward it.",p:["Mount the camera low, tilted slightly down, and fixed rigidly","Calibrate the camera to remove lens distortion","Use a region of interest on the floor","Convert image position to steering angle","Publish /cmd_vel from the vision node"],lab:"Make the rover drive toward a bright marker placed on the floor."},
+{t:"Obstacle Recognition",s:"The camera can tell what an obstacle is, not just that something is there. This helps the robot choose between stopping, waiting and going around.",p:["Colour and shape cues for cones, boxes and signs","Pretrained models such as MobileNet SSD run on the Pi at low frame rate","Use lower resolution to reach 5 to 10 FPS","Check the model's result against the LiDAR distance","Slow down for people and stop for unknown objects"],lab:"Recognise a cone and a box and print a different message for each."},
+{t:"Lane Following Concepts",s:"Following a line or lane is a classic AGV task. Detect the line, measure how far the robot is from its centre, then steer to correct.",p:["Threshold the floor tape colour in HSV","Take the centroid of the line in a band of rows near the bottom","Cross-track error = line centre minus image centre","Use PID on the error to steer","Slow down in bends and handle lost-line cases"],c:{l:"python",x:"band = mask[400:480, :]\nM = cv2.moments(band)\nif M['m00'] > 0:\n    cx = int(M['m10']/M['m00'])\n    error = (cx - 320) / 320.0\n    twist.angular.z = -kp * error"},lab:"Follow a taped path with one curve at a steady speed."},
+{t:"Vision Assisted AGV",s:"Vision and LiDAR cover each other's weak points. LiDAR gives accurate distance. The camera gives meaning and colour.",p:["Sensor fusion: use both, decide with rules or a state machine","States such as FOLLOW, SLOW, STOP, RECOVER","LiDAR safety zone overrides vision commands","Time-sync data from both sensors","Log all decisions for debugging"],lab:"Build a state machine that follows the lane and stops for any LiDAR obstacle."}]},
+{n:13,title:"Display Interface",photo:"ui",goal:"Give the rover a screen so operators can see its status and control it without a laptop.",out:["Show text on an LCD","Build a status dashboard","Monitor battery, speed and sensors","Design a clear user interface"],hw:["I2C 16x2 LCD or 7-inch touch display","Raspberry Pi","Voltage sensor"],
+topics:[
+{t:"LCD Integration",s:"A character LCD shows short messages through the I2C bus using only two data wires.",p:["Enable I2C with raspi-config and check with i2cdetect -y 1","Common address is 0x27 or 0x3F","Use the RPLCD library","16 characters per line, so keep text short","Power the backlight from 5 V"],c:{l:"python",x:"from RPLCD.i2c import CharLCD\nlcd = CharLCD('PCF8574', 0x27, cols=16, rows=2)\nlcd.write_string('AGV Ready')\nlcd.crlf()\nlcd.write_string('Batt: 12.4 V')"},lab:"Show your IP address and battery voltage on the LCD."},
+{t:"Dashboard Design",s:"A graphical dashboard on a touch display or in a web page gives operators the full picture at a glance.",p:["Show the most important state first: mode, battery, errors","Large buttons for touch screens","Colour for state: green OK, amber warning, red fault","Flask or FastAPI page served by the Pi, opened full-screen in Chromium kiosk mode","Update with WebSockets or regular polling"],c:{l:"bash",x:"chromium-browser --kiosk http://localhost:5000"},lab:"Create a one-page dashboard with speed, battery and mode."},
+{t:"AGV Status Monitoring",s:"Collect data from the robot and display it live. Good monitoring makes problems visible before they stop the robot.",p:["Battery voltage and estimated percentage","Left and right wheel speed","Distance to nearest obstacle","CPU temperature and load","Current mode: idle, mapping, navigating, fault","Subscribe to ROS2 topics and forward values to the UI"],lab:"Display five live values and raise a warning when the battery is below 11 V."},
+{t:"User Interface",s:"A good interface prevents mistakes. Plan what the operator needs to do and make those actions obvious and safe.",p:["Few controls, clearly labelled","Emergency stop always visible and always works","Confirm risky actions","Show feedback after every command","Test with someone who has not seen the robot before"],lab:"Test your interface with a classmate and write down three improvements."}]},
+{n:14,title:"Prototype Development",photo:"bots",goal:"Bring every subsystem together on one chassis and make the complete rover work reliably.",out:["Complete, tidy hardware integration","Software that starts automatically","A tested and documented rover"],hw:["All course hardware","Cable ties, standoffs, connectors","Multimeter"],
+topics:[
+{t:"Complete Hardware Integration",s:"Combine all subsystems with clean wiring and a power system that handles the full load.",p:["Mount the heavy battery low and central","Separate power and signal cables","Use connectors that cannot be plugged in backwards","Label every wire","Measure voltage at each rail before connecting the Pi","Strain relief on cables that move"],lab:"Wire the whole rover and verify each power rail with a multimeter."},
+{t:"AGV Assembly",s:"Assembly is mechanical and electrical. Follow a clear order and test as you build.",p:["Frame and wheels, then motors and encoders","Add the LiDAR with a clear 360 degree view","Camera forward-facing and rigid","Pi and electronics in a ventilated enclosure","Emergency stop within easy reach","Create a launch file that starts all nodes with one command"],c:{l:"bash",x:"# systemd service so the rover starts on boot\nsudo systemctl enable agv.service\nsudo systemctl start agv.service\njournalctl -u agv.service -f"},lab:"Assemble the rover and boot it to a ready state with no keyboard."},
+{t:"Testing & Debugging",s:"Test one subsystem at a time, then the whole. When something fails, change one thing and test again.",p:["Check power, then sensors, then motors, then software","ros2 topic echo, rqt_graph and rosbag record show what happens","Look for TF problems, wrong frame names and clock differences","Log everything with timestamps","Keep a test log: what changed, what happened"],c:{l:"bash",x:"ros2 bag record /scan /odom /cmd_vel /tf\nros2 doctor --report\nrqt_graph"},lab:"Run a full test drive, record a rosbag and find one problem to fix."}]},
+{n:15,title:"Final Demonstration & Certification",photo:"bots",goal:"Show what you have built: mapping, navigation and vision on your own rover, then receive your certificate.",out:["Present the rover to an evaluation panel","Run live demonstrations","Answer technical questions","Receive certification"],hw:["Your complete rover","Demo arena with obstacles"],
+topics:[
+{t:"Mapping Demo",s:"Show the rover creating a map of the demo arena with SLAM.",p:["Launch SLAM with one command","Drive slowly through the whole arena","Show the map growing in RViz","Save the map and explain its quality","Point out loop closure or drift"],lab:"Practise the demo twice and prepare a one-minute explanation."},
+{t:"Navigation Demo",s:"Send goals on the saved map and have the rover drive to them on its own, avoiding obstacles.",p:["Load the saved map and set the initial pose","Send at least three goals","Add a surprise obstacle during the run","Show costmaps and path in RViz","Explain what happens on failure"],lab:"Prepare a goal sequence and a plan for a recovery if localization fails."},
+{t:"Computer Vision Demo",s:"Show the camera detecting objects or following a lane and affecting the robot's behaviour.",p:["Live stream with detection overlays","Colour or shape detection with labels","Lane or object following","Vision and LiDAR working together","Mention lighting conditions and limits"],lab:"Check lighting in the demo room and recalibrate colours."},
+{t:"Evaluation & Certification",s:"Your work is assessed on the working robot, your understanding and your documentation.",p:["Hardware: neat, safe and working","Software: mapping, navigation and vision run as shown","Understanding: you explain choices and answer questions","Documentation: wiring diagram, code and test log","Safety practice during the demo","Certificate awarded on successful completion"],lab:"Submit your report, code repository and demo video."}]}
+];
+
+const PHASES=[
+ {name:"Foundations",range:[1,3],note:"Hardware, Linux and Python"},
+ {name:"Motion Control",range:[4,5],note:"Encoder and BLDC drives"},
+ {name:"ROS2 Autonomy",range:[6,9],note:"Nodes, LiDAR, SLAM and navigation"},
+ {name:"Computer Vision",range:[10,12],note:"OpenCV and vision-assisted driving"},
+ {name:"Integration",range:[13,15],note:"Interface, prototype and demonstration"}
+];
+// schematics for days without a photo: boxes [x,y,w,h,label,sub], links [from,to,label]
+const SCH={
+ 2:{b:[[20,110,120,80,"Laptop","terminal / VS Code"],[230,90,150,120,"Raspberry Pi","Linux, 3.3V GPIO"],[470,40,110,70,"LED","GPIO17 + 330 ohm"],[470,190,110,70,"Button","GPIO27"]],l:[[0,1,"SSH over Wi-Fi"],[1,2,"out"],[3,1,"in"]]},
+ 3:{b:[[20,115,130,80,"Raspberry Pi","Python"],[260,20,140,70,"IMU","I2C 0x68"],[260,115,140,70,"HC-SR04","trigger / echo"],[260,210,140,70,"Microcontroller","UART 115200"],[470,115,110,80,"Data","filtered values"]],l:[[0,1,"I2C"],[0,2,"GPIO"],[0,3,"serial"],[1,4,""],[2,4,""],[3,4,""]]},
+ 4:{b:[[20,100,120,80,"Raspberry Pi","PID loop"],[220,100,120,80,"H-bridge","L298N / BTS7960"],[400,30,180,70,"DC gear motor","12 V"],[400,170,180,70,"Encoder","A / B pulses"]],l:[[0,1,"PWM"],[1,2,"power"],[2,3,"shaft"],[3,0,"pulses give RPM",1]]},
+ 5:{b:[[20,110,120,80,"Raspberry Pi","throttle, enable"],[200,110,130,80,"BLDC controller","6-step"],[400,40,180,70,"Hub motor","U V W phases"],[400,190,180,70,"Hall sensors","rotor position"]],l:[[0,1,"PWM / DAC"],[1,2,"3-phase"],[3,1,"halls"]]},
+ 6:{b:[[20,100,140,80,"lidar_node","publisher"],[230,100,130,80,"/scan","topic"],[430,20,150,80,"nav_node","sub + pub"],[430,190,150,80,"motor_node","subscriber"]],l:[[0,1,"publish"],[1,2,"subscribe"],[2,3,"/cmd_vel"]]},
+ 10:{b:[[10,110,100,80,"Camera","USB, 640x480"],[150,110,100,80,"OpenCV","VideoCapture"],[290,110,110,80,"Processing","blur, edges"],[440,110,140,80,"Flask","MJPEG :5000"]],l:[[0,1,"frames"],[1,2,""],[2,3,"JPEG"]]},
+ 11:{b:[[10,110,90,80,"Frame","BGR"],[130,110,90,80,"HSV","inRange"],[250,110,90,80,"Mask","erode, dilate"],[370,110,90,80,"Contour","largest"],[490,110,100,80,"Steering","P control"]],l:[[0,1,""],[1,2,""],[2,3,""],[3,4,"error"]]}
+};
+function schSvg(d){
+  const s=SCH[d]; if(!s) return "";
+  const c=b=>[b[0]+b[2]/2,b[1]+b[3]/2];
+  let o='<svg class="sch" viewBox="0 0 600 300" role="img" aria-label="Schematic of the day\'s hardware and data flow" xmlns="http://www.w3.org/2000/svg"><defs><marker id="ar'+d+'" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--accent);stroke:none"/></marker></defs>';
+  s.l.forEach(([i,j,t,u])=>{
+    const a=s.b[i],b=s.b[j],[ax,ay]=c(a),[bx,by]=c(b);
+    let x1,y1,x2,y2;
+    if(Math.abs(bx-ax)>=Math.abs(by-ay)*0.6&&Math.abs(bx-ax)>10){const dir=bx>ax?1:-1;x1=ax+dir*a[2]/2;x2=bx-dir*b[2]/2;y1=ay;y2=by}
+    else{const dir=by>ay?1:-1;y1=ay+dir*a[3]/2;y2=by-dir*b[3]/2;x1=ax;x2=bx}
+    const mx=(x1+x2)/2,my=(y1+y2)/2;
+    if(u){const by2=Math.max(a[1]+a[3],b[1]+b[3])+28;
+      o+='<path d="M'+ax+' '+(a[1]+a[3])+' L'+ax+' '+by2+' L'+bx+' '+by2+' L'+bx+' '+(b[1]+b[3])+'" marker-end="url(#ar'+d+')"/>';
+      if(t)o+='<text class="lk" font-size="11" x="'+((ax+bx)/2)+'" y="'+(by2-6)+'" text-anchor="middle">'+t+'</text>';return}
+    o+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" marker-end="url(#ar'+d+')"/>';
+    if(t)o+='<text class="lk" font-size="11" x="'+mx+'" y="'+(my-6)+'" text-anchor="middle">'+t+'</text>';
+  });
+  s.b.forEach(([x,y,w,h,l,sub])=>{
+    o+='<rect class="b" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="5"/><text x="'+(x+w/2)+'" y="'+(y+h/2-2)+'" font-size="14" font-weight="600" text-anchor="middle">'+l+'</text><text class="sub" x="'+(x+w/2)+'" y="'+(y+h/2+16)+'" font-size="10.5" text-anchor="middle">'+sub+'</text>';
+  });
+  return o+'</svg>';
+}
+const $=(t,a,h)=>{const e=document.createElement(t);if(a)for(const k in a){if(k==="class")e.className=a[k];else e.setAttribute(k,a[k])}if(h!=null)e.innerHTML=h;return e};
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const app=document.getElementById("app");
+let cur=0,ti=0;
+
+function pad(n){return String(n).padStart(2,"0")}
+function openDay(n,t){cur=n;ti=t||0;if(location.hash!=="#day"+n){location.hash="day"+n}else render();}
+
+function home(){
+  const nTopics=DAYS.reduce((a,d)=>a+d.topics.length,0);
+  let h=`<section class="hero"><div><div class="label">Autonomous rover · 15-day hands-on training</div>
+  <h1 style="margin-top:14px">Build an <span>autonomous</span> rover from zero</h1>
+  <p class="lead">A mobile ground vehicle that navigates, maps and executes tasks without human intervention or GPS reliance. Pick any day to open its topics, code and lab work.</p>
+  <div class="cta"><a class="btn" href="#day1">Start with Day 1</a><button class="btn ghost" id="jump" type="button">Browse all days</button></div></div>
+  <figure><img src="${IMG.rovers}" alt="Three small white autonomous delivery rovers parked on a brick-lined street"><figcaption class="label">Sidewalk AMR fleet</figcaption></figure></section>
+  <div class="facts"><div><b>15</b><span class="label">Days</span></div><div><b>${nTopics}</b><span class="label">Topics</span></div><div><b>5</b><span class="label">Phases</span></div><div><b>3</b><span class="label">Final demos</span></div></div>
+  <div class="shift"><div><div class="label">The industry shift</div><h3>Fixed-path AGV to flexible AMR</h3><p>Rigid AGVs follow tape or wires. Autonomous mobile robots build a map and choose their own route around obstacles.</p></div>
+  <div><div class="label">Real-world impact</div><h3>Where rovers work today</h3><p>Warehouse logistics such as Amazon Kiva systems, automated assembly lines, hazardous environment inspection and search and rescue.</p></div></div>
+  <div id="days">`;
+  PHASES.forEach(p=>{
+    h+=`<section class="phase"><header><h2>${p.name}</h2><span class="label">Days ${p.range[0]}–${p.range[1]} · ${p.note}</span></header><div class="cards">`;
+    DAYS.filter(d=>d.n>=p.range[0]&&d.n<=p.range[1]).forEach(d=>{
+      h+=`<article class="card"><button class="top" data-day="${d.n}" type="button"><span class="num">${pad(d.n)}</span><h3>${d.title}</h3></button>
+      <div class="chips">${d.topics.map((t,i)=>`<button class="chip" data-day="${d.n}" data-topic="${i}" type="button">${t.t}</button>`).join("")}</div>
+      <button class="go" data-day="${d.n}" type="button">Open Day ${d.n} →</button></article>`;
+    });
+    h+=`</div></section>`;
+  });
+  h+=`</div><footer class="foot">Course content follows the 15-day outline. Photos are from the course presentation.</footer>`;
+  app.innerHTML=h;
+  app.querySelectorAll("[data-day]").forEach(b=>b.addEventListener("click",()=>openDay(+b.dataset.day,+(b.dataset.topic||0))));
+  document.getElementById("jump").onclick=()=>document.getElementById("days").scrollIntoView({behavior:"smooth"});
+}
+
+function day(n){
+  const d=DAYS[n-1];if(!d)return home();
+  const prev=DAYS[n-2],next=DAYS[n];
+  const vis=d.photo?`<img src="${IMG[d.photo]}" alt="Photo related to ${d.title}">`:schSvg(n);
+  app.innerHTML=`<nav class="crumb label"><button id="back" type="button">← All days</button><span>/</span><span>Day ${n}</span></nav>
+  <section class="dhead"><div><div class="dn">Day ${n} of 15</div><h1>${d.title}</h1><p>${d.goal}</p>
+  <div class="dmeta"><div><h4>You will be able to</h4><ul>${d.out.map(o=>`<li>${o}</li>`).join("")}</ul></div><div><h4>Hardware</h4><ul>${d.hw.map(o=>`<li>${o}</li>`).join("")}</ul></div></div></div>
+  <div class="visual">${vis}</div></section>
+  <section class="read"><div class="tlist" role="tablist" aria-label="Topics for day ${n}">${d.topics.map((t,i)=>`<button class="tbtn" role="tab" data-i="${i}" aria-selected="${i===ti}" type="button"><small>${n}.${i+1}</small>${t.t}</button>`).join("")}</div>
+  <article class="detail" id="detail" role="tabpanel"></article></section>`;
+  document.getElementById("back").onclick=()=>{location.hash=""};
+  app.querySelectorAll(".tbtn").forEach(b=>b.addEventListener("click",()=>{ti=+b.dataset.i;sel(d)}));
+  sel(d,true);
+  log("view_day","Day "+n+": "+d.title);
+}
+function sel(d,first){
+  const t=d.topics[ti];
+  app.querySelectorAll(".tbtn").forEach((b,i)=>b.setAttribute("aria-selected",i===ti));
+  const el=document.getElementById("detail");
+  let h=`<div class="label">Day ${d.n} · Topic ${ti+1} of ${d.topics.length}</div><h2>${t.t}</h2><p class="sum">${t.s}</p>
+  <div class="flow" aria-label="Topics in this day">${d.topics.map((x,i)=>`<button type="button" data-i="${i}" ${i===ti?'aria-current="true"':''}>${x.t}</button>${i<d.topics.length-1?'<span>→</span>':''}`).join("")}</div>
+  <h4>Key points</h4><ul class="pts">${t.p.map(x=>`<li>${x}</li>`).join("")}</ul>`;
+  if(t.c)h+=`<h4>Example code</h4><div class="code"><div class="tag"><span>${t.c.l}</span><button type="button" class="cp">Copy</button></div><pre><code>${esc(t.c.x)}</code></pre></div>`;
+  h+=`<div class="lab"><b>Hands-on lab</b>${t.lab}</div>
+  <div class="pn"><button type="button" id="pt" ${ti===0&&d.n===1?"hidden":""}>← ${ti>0?d.topics[ti-1].t:(DAYS[d.n-2]?"Day "+(d.n-1)+": "+DAYS[d.n-2].title:"")}</button>
+  <button type="button" id="nt" ${ti===d.topics.length-1&&d.n===15?"hidden":""}>${ti<d.topics.length-1?d.topics[ti+1].t:(DAYS[d.n]?"Day "+(d.n+1)+": "+DAYS[d.n].title:"")} →</button></div>`;
+  el.innerHTML=h;
+  el.querySelectorAll(".flow button").forEach(b=>b.onclick=()=>{ti=+b.dataset.i;sel(d)});
+  const cp=el.querySelector(".cp");
+  if(cp)cp.onclick=async()=>{try{await navigator.clipboard.writeText(t.c.x);cp.textContent="Copied";log("copy_code","Day "+d.n+" · "+t.t)}catch(e){const r=document.createRange();r.selectNodeContents(el.querySelector("code"));const s=getSelection();s.removeAllRanges();s.addRange(r);cp.textContent="Selected"}setTimeout(()=>cp.textContent="Copy",1500)};
+  document.getElementById("pt").onclick=()=>{if(ti>0){ti--;sel(d)}else openDay(d.n-1,DAYS[d.n-2].topics.length-1)};
+  document.getElementById("nt").onclick=()=>{if(ti<d.topics.length-1){ti++;sel(d)}else openDay(d.n+1,0)};
+  if(!first){el.scrollIntoView({behavior:"smooth",block:"start"});log("view_topic","Day "+d.n+" · "+t.t)}
+}
+/* ---------- Firebase access control, activity log, HR dashboard ---------- */
+const FIREBASE_CONFIG={apiKey:"AIzaSyDx1RrazdsWj2ue0jishUlLh63eLsNbHUI",authDomain:"an-autonomous-rover.firebaseapp.com",projectId:"an-autonomous-rover",appId:"1:811022068570:web:179dd903a0fc471caf2163"};
+const HR_EMAIL="fazilsheikh614@gmail.com";
+const CONFIGURED=!/PASTE/.test(FIREBASE_CONFIG.apiKey);
+let auth=null,fs=null,AUTHWAIT=false;
+try{
+  if(CONFIGURED&&window.firebase){
+    firebase.initializeApp(FIREBASE_CONFIG);auth=firebase.auth();fs=firebase.firestore();
+    auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(()=>{});
+    AUTHWAIT=true;
+  }
+}catch(e){console.error(e)}
+const UOK=/^[a-z0-9_.+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+let busy=false;
+let S=null;try{S=JSON.parse(sessionStorage.getItem("agv_s")||"null")}catch(e){}
+function saveS(){try{if(S)sessionStorage.setItem("agv_s",JSON.stringify(S));else sessionStorage.removeItem("agv_s")}catch(e){}}
+async function log(action,detail){
+  if(!S||!fs||!auth||!auth.currentUser)return;
+  try{await fs.collection("activity").add({uid:auth.currentUser.uid,user:S.username,name:S.name||"",role:S.role,action,detail:detail||"",ts:Date.now()})}catch(e){}
+}
+async function touch(online){
+  if(!S||!fs||!auth||!auth.currentUser)return;
+  try{await fs.doc("presence/"+auth.currentUser.uid).set({user:S.username,name:S.name||"",role:S.role,loginAt:S.at,lastSeen:Date.now(),online:online!==false})}catch(e){}
+}
+setInterval(()=>{if(S)touch()},60000);
+const authMsg=e=>{const c=e&&e.code||"";
+  if(/invalid-credential|user-not-found|wrong-password|invalid-login/.test(c))return "Wrong username or password, or HR has not added this account.";
+  if(c==="auth/too-many-requests")return "Too many attempts. Wait a few minutes and try again.";
+  if(c==="auth/network-request-failed")return "No internet connection. Try again.";
+  if(c==="auth/invalid-email")return "Enter a valid email address.";
+  return "Login failed. Try again."};
+async function doLogin(role,u,p){busy=true;try{return await doLogin0(role,u,p)}finally{busy=false}}
+async function doLogin0(role,u,p){
+  u=(u||"").trim().toLowerCase();
+  if(!u||!p)return "Enter your username and password.";
+  if(!CONFIGURED)return "Setup needed: the Firebase keys have not been added to this site yet.";
+  if(!auth)return "The login service did not load. Check your internet connection and reload.";
+  if(!UOK.test(u))return "Enter your email address as the username.";
+  if(role==="hr"&&u!==HR_EMAIL)return "This email does not have HR access.";
+  try{await auth.signInWithEmailAndPassword(u,p)}catch(e){return authMsg(e)}
+  let name=role==="hr"?"HR":"Fazil";
+  if(u!==HR_EMAIL){
+    let d=null;try{const s=await fs.doc("trainers/"+u).get();d=s.exists?s.data():null}catch(e){}
+    if(!d||d.active===false){await auth.signOut();return d?"This account is turned off. Please contact HR.":"HR has not added this account yet."}
+    name=d.name||u;
+  }
+  S={role,username:u,name,at:Date.now()};saveS();
+  await log("login",role==="hr"?"HR signed in":"Trainer signed in");touch();
+  return "";
+}
+async function doLogout(){
+  await log("logout","Signed out");await touch(false);
+  S=null;saveS();try{await auth.signOut()}catch(e){}location.hash="";render();
+}
+if(auth){
+  auth.onAuthStateChanged(async u=>{
+    if(busy)return;
+    if(!u){S=null;saveS()}
+    else if(!S||S.username!==(u.email||"").toLowerCase()){S=null;saveS();await auth.signOut()}
+    else if(S.role==="trainer"&&S.username!==HR_EMAIL){
+      try{const s=await fs.doc("trainers/"+S.username).get();if(!s.exists||s.data().active===false){S=null;saveS();await auth.signOut()}}catch(e){}
+    }
+    if(S)touch();
+    AUTHWAIT=false;render();
+  });
+}
+function who(){
+  const el=document.getElementById("who");if(!el)return;
+  if(!S){el.innerHTML="";return}
+  el.innerHTML=`<span class="me"><b>${esc(S.name||S.username)}</b><small class="label">${S.role==="hr"?"HR":"Trainer"}</small></span>`+
+   (S.role==="hr"?`<a class="pill" href="#dashboard">Dashboard</a>`:"")+`<button class="pill" id="out" type="button">Log out</button>`;
+  document.getElementById("out").onclick=doLogout;
+}
+function loginView(){
+  let role="trainer";
+  app.innerHTML=`<section class="login"><div class="lpanel"><img src="${IMG.bots}" alt="Autonomous delivery rovers"><div class="lshade"></div>
+   <div class="ltxt"><div class="label">AGV Rover · Training Program</div><h1>Sign in to the <span>course portal</span></h1><p>Trainers get the full 15-day curriculum. HR manages accounts and sees who is using the portal.</p></div></div>
+   <form class="lform" id="lf" autocomplete="on" novalidate><h2>Login</h2>
+    <div class="seg" role="radiogroup" aria-label="Login as"><button type="button" role="radio" data-r="hr" aria-checked="false">HR</button><button type="button" role="radio" data-r="trainer" aria-checked="true">Trainer</button></div>
+    <label for="lu">Username (email)</label><input id="lu" name="username" type="text" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false">
+    <label for="lp">Password</label><div class="pw"><input id="lp" name="password" type="password" autocomplete="current-password"><button type="button" id="sp" class="pill">Show</button></div>
+    <p id="le" class="err" role="alert" ${CONFIGURED?"hidden":""}>${CONFIGURED?"":"Setup needed: add the Firebase keys to this site (see README)."}</p>
+    <button class="btn" id="lb" type="submit">Log in as Trainer</button>
+    <p class="hint" id="lh">Trainer accounts are created by HR. Ask HR if you cannot log in.</p></form></section>`;
+  const seg=app.querySelectorAll(".seg button"),lb=document.getElementById("lb"),lh=document.getElementById("lh");
+  seg.forEach(b=>b.onclick=()=>{role=b.dataset.r;seg.forEach(x=>x.setAttribute("aria-checked",x===b));lb.textContent="Log in as "+(role==="hr"?"HR":"Trainer");lh.hidden=role==="hr"});
+  document.getElementById("sp").onclick=e=>{const i=document.getElementById("lp");i.type=i.type==="password"?"text":"password";e.target.textContent=i.type==="password"?"Show":"Hide"};
+  document.getElementById("lf").onsubmit=async ev=>{
+    ev.preventDefault();const err=document.getElementById("le");err.hidden=true;lb.disabled=true;lb.textContent="Checking...";
+    let m="";try{m=await doLogin(role,document.getElementById("lu").value,document.getElementById("lp").value)}catch(e){m="Login failed. Try again."}
+    lb.disabled=false;lb.textContent="Log in as "+(role==="hr"?"HR":"Trainer");
+    if(m){err.textContent=m;err.hidden=false}else{location.hash="";render()}
+  };
+}
+let unsubs=[];
+function stopSubs(){unsubs.forEach(f=>{try{f()}catch(e){}});unsubs=[]}
+const ACT={login:"Logged in",logout:"Logged out",view_day:"Opened day",view_topic:"Opened topic",copy_code:"Copied code",trainer_added:"Added trainer",trainer_removed:"Removed trainer",trainer_toggled:"Changed trainer status",reset_email:"Sent password reset"};
+const tfmt=t=>t?new Date(t).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"Never";
+function ago(t){const s=Math.max(0,(Date.now()-t)/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+" min ago";if(s<86400)return Math.floor(s/3600)+" h ago";return Math.floor(s/86400)+" d ago"}
+function dashboard(){
+  app.innerHTML=`<nav class="crumb label"><button id="back" type="button">← Course</button><span>/</span><span>HR dashboard</span></nav>
+  <h1 class="dtitle">HR dashboard</h1>
+  <p class="sub">Who is using the portal, when, and what they did. Only HR can see this page.</p>
+  <div id="dbn" class="notice" hidden></div>
+  <div class="facts" id="stats"></div>
+  <section class="panel"><h2>Online now</h2><div id="online"></div></section>
+  <section class="panel"><h2>Trainer accounts</h2>
+   <form id="addf" class="addf" autocomplete="off"><div><label for="an">Name</label><input id="an" type="text"></div><div><label for="au">Username (email)</label><input id="au" type="text" autocapitalize="off" spellcheck="false"></div><div><label for="ap">Password</label><input id="ap" type="text" autocomplete="off" placeholder="min 6 characters"></div><button class="btn" type="submit">Add trainer</button></form>
+   <p id="ae" class="err" role="alert" hidden></p><p id="ao" class="hint" hidden></p><div class="tw" id="tm"></div></section>
+  <section class="panel"><h2>Activity log</h2><div class="filters"><label for="fu" class="label">User</label><select id="fu"><option value="">All users</option></select><label for="fa" class="label">Action</label><select id="fa"><option value="">All actions</option>${Object.keys(ACT).map(k=>`<option value="${k}">${ACT[k]}</option>`).join("")}</select></div><div class="tw" id="log"></div></section>`;
+  document.getElementById("back").onclick=()=>{location.hash=""};
+  const notice=document.getElementById("dbn");
+  if(!fs){notice.hidden=false;notice.textContent="The database is not connected. Add the Firebase keys to this site (see README)."}
+  let T=[],U=[],EV=[],fu="",fa="";
+  function paint(){
+    const ev=EV,now=Date.now(),d0=new Date();d0.setHours(0,0,0,0);
+    const online=U.filter(u=>u.online&&now-u.lastSeen<150000);
+    const today=ev.filter(e=>e.ts>=d0.getTime());
+    document.getElementById("stats").innerHTML=[[T.length,"Trainer accounts"],[online.length,"Online now"],[today.filter(e=>e.action==="login").length,"Logins today"],[today.filter(e=>e.action==="view_topic"||e.action==="view_day").length,"Pages opened today"]].map(([n,l])=>`<div><b>${n}</b><span class="label">${l}</span></div>`).join("");
+    document.getElementById("online").innerHTML=online.length?`<div class="tw"><table><thead><tr><th>User</th><th>Role</th><th>Signed in</th><th>Last active</th></tr></thead><tbody>${online.map(u=>`<tr><td>${esc(u.name||u.user)}<small>${esc(u.user)}</small></td><td>${u.role==="hr"?"HR":"Trainer"}</td><td>${tfmt(u.loginAt)}</td><td>${ago(u.lastSeen)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="empty">Nobody is signed in right now.</p>`;
+    document.getElementById("tm").innerHTML=T.length?`<table><thead><tr><th>Trainer</th><th>Status</th><th>Logins</th><th>Last login</th><th>Days opened</th><th>Actions</th></tr></thead><tbody>${T.map(t=>{
+      const mine=ev.filter(e=>e.user===t.id),lg=mine.filter(e=>e.action==="login"),days=new Set(mine.filter(e=>e.action==="view_day").map(e=>e.detail.split(":")[0])).size;
+      return `<tr><td>${esc(t.name||t.id)}<small>${esc(t.id)}</small></td><td><span class="st ${t.active===false?"off":"on"}">${t.active===false?"Off":"Active"}</span></td><td>${lg.length}</td><td>${lg.length?tfmt(lg[0].ts):"Never"}</td><td>${days}</td>
+      <td class="acts"><button class="pill" data-act="toggle" data-id="${esc(t.id)}" type="button">${t.active===false?"Turn on":"Turn off"}</button><button class="pill" data-act="reset" data-id="${esc(t.id)}" type="button">Email reset link</button><button class="pill danger" data-act="remove" data-id="${esc(t.id)}" type="button">Remove</button></td></tr>`}).join("")}</tbody></table>`:`<p class="empty">No trainers yet. Add the first trainer above. They can log in once you add them.</p>`;
+    const sel=document.getElementById("fu"),keep=sel.value,names=[...new Set(ev.map(e=>e.user))].sort();
+    if(sel.options.length!==names.length+1){sel.innerHTML=`<option value="">All users</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");sel.value=keep}
+    const rows=ev.filter(e=>(!fu||e.user===fu)&&(!fa||e.action===fa)).slice(0,150);
+    document.getElementById("log").innerHTML=rows.length?`<table><thead><tr><th>When</th><th>User</th><th>Role</th><th>Action</th><th>Detail</th></tr></thead><tbody>${rows.map(e=>`<tr><td>${tfmt(e.ts)}</td><td>${esc(e.user)}</td><td>${e.role==="hr"?"HR":"Trainer"}</td><td><span class="act">${ACT[e.action]||esc(e.action)}</span></td><td>${esc(e.detail||"")}</td></tr>`).join("")}</tbody></table>`:`<p class="empty">No activity recorded yet.</p>`;
+  }
+  paint();
+  document.getElementById("fu").onchange=e=>{fu=e.target.value;paint()};
+  document.getElementById("fa").onchange=e=>{fa=e.target.value;paint()};
+  if(fs){
+    const er=()=>{notice.hidden=false;notice.textContent="Could not read the database. Check the Firestore rules in the README."};
+    unsubs.push(fs.collection("trainers").onSnapshot(s=>{T=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||a.id).localeCompare(b.name||b.id));paint()},er));
+    unsubs.push(fs.collection("presence").onSnapshot(s=>{U=s.docs.map(d=>d.data());paint()},er));
+    unsubs.push(fs.collection("activity").orderBy("ts","desc").limit(300).onSnapshot(s=>{EV=s.docs.map(d=>d.data());paint()},er));
+  }
+  const tick=setInterval(paint,30000);unsubs.push(()=>clearInterval(tick));
+  const ae=document.getElementById("ae"),ao=document.getElementById("ao"),fail=m=>{ae.textContent=m;ae.hidden=!m},info=m=>{ao.textContent=m;ao.hidden=!m};
+  document.getElementById("addf").onsubmit=async ev=>{
+    ev.preventDefault();fail("");info("");
+    const name=document.getElementById("an").value.trim(),u=document.getElementById("au").value.trim().toLowerCase(),p=document.getElementById("ap").value;
+    if(!fs)return fail("Database not connected.");
+    if(!name)return fail("Enter the trainer's name.");
+    if(!UOK.test(u))return fail("Enter a valid email address as the username.");
+    if(p.length<6)return fail("Password needs at least 6 characters.");
+    if(u===HR_EMAIL)return fail("That email belongs to HR.");
+    if(T.some(t=>t.id===u))return fail("A trainer with this email already exists.");
+    try{
+      const sec=firebase.apps.find(a=>a.name==="sec")||firebase.initializeApp(FIREBASE_CONFIG,"sec");
+      let existed=false;
+      try{await sec.auth().createUserWithEmailAndPassword(u,p);await sec.auth().signOut()}catch(e){if(e.code==="auth/email-already-in-use")existed=true;else throw e}
+      await fs.doc("trainers/"+u).set({username:u,name,active:true,createdAt:Date.now(),createdBy:HR_EMAIL});
+      await log("trainer_added",name+" ("+u+")");ev.target.reset();
+      if(existed)info("This email already had a login, so its old password still applies. Use 'Email reset link' if the trainer needs a new one.");
+    }catch(e){fail(e.code==="auth/weak-password"?"Password is too weak. Use at least 6 characters.":"Could not add the trainer. Check the Firebase setup in the README.")}
+  };
+  document.getElementById("tm").onclick=async ev=>{
+    const b=ev.target.closest("button[data-act]");if(!b||!fs)return;const id=b.dataset.id,act=b.dataset.act,t=T.find(x=>x.id===id);if(!t)return;
+    fail("");info("");
+    try{
+      if(act==="toggle"){await fs.doc("trainers/"+id).update({active:t.active===false});await log("trainer_toggled",id+(t.active===false?" turned on":" turned off"))}
+      else if(act==="remove"){if(b.dataset.c!=="1"){b.dataset.c="1";b.textContent="Click to confirm";return}await fs.doc("trainers/"+id).delete();await log("trainer_removed",id)}
+      else if(act==="reset"){await auth.sendPasswordResetEmail(id);await log("reset_email",id);info("Password reset email sent to "+id+".")}
+    }catch(e){fail("Could not complete that action.")}
+  };
+}
+
+function render(){
+  stopSubs();who();
+  if(AUTHWAIT){app.innerHTML='<p class="sub" style="padding-top:40px">Loading...</p>';return}
+  if(!S){loginView();window.scrollTo(0,0);return}
+  const m=/^#day(\d+)$/.exec(location.hash);
+  if(location.hash==="#dashboard"&&S.role==="hr")dashboard();
+  else if(m){cur=+m[1];day(cur);} else home();
+  window.scrollTo(0,0);
+}
+addEventListener("hashchange",render);
+document.getElementById("home").addEventListener("click",e=>{e.preventDefault();if(location.hash)location.hash="";else render()});
+document.getElementById("theme").onclick=()=>{
+  const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
+  r.dataset.theme=dark?"light":"dark";
+};
+render();
+</script>
